@@ -1,7 +1,7 @@
 package com.evernote;
 
 import java.io.*;
-import java.sql.Date;
+import java.util.Date;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
@@ -15,29 +15,50 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+//import java.util.Date;
+import java.util.Locale;
+
+import javax.xml.bind.DatatypeConverter;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlTransient;
+import javax.xml.bind.annotation.XmlType;
+
 public class Solution {
 
-	public static void main(String[] args) throws IOException, JAXBException, ParseException {
-		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-		String command = null;
-		Map<String, Note> notes = new HashMap<String, Note>();
+	public static void main(String[] args) throws Exception{
+		try {
+			BufferedReader br = new BufferedReader(new InputStreamReader(
+					System.in));
+			String command = null;
+			Map<String, Note> notes = new HashMap<String, Note>();
 
-		do {
-			command = br.readLine();
-			if (command.equals("CREATE") || command.equals("UPDATE")) {
-				Note n = getNote(br);
-				notes.put(n.getGuid(), n); // for update GUID will be the same
-			} else if (command.equals("DELETE")) {
-				String guid = br.readLine();
-				notes.remove(guid);
-			} else if (command.equals("SEARCH")) {
-				handleSearch(br, notes.values());
-			} else {
-				// Dont know what to do
+			while(true) {
+				command = br.readLine();
+				if(command == null)
+					break;
+				if (command.equals("CREATE") || command.equals("UPDATE")) {
+					Note n = getNote(br);
+					notes.put(n.getGuid(), n); // for update GUID will be the
+												// same
+				} else if (command.equals("DELETE")) {
+					String guid = br.readLine();
+					notes.remove(guid);
+				} else if (command.equals("SEARCH")) {
+					handleSearch(br, notes.values());
+				} else {
+					// Dont know what to do
+				}
 			}
-		} while (command != null);
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+			throw e;
+		}
 
-		// handleSearch(br, notes.values());
 
 	}
 
@@ -47,6 +68,7 @@ public class Solution {
 		String searchCrieteria = br.readLine();
 		String key = "";
 		char searchType = 'n';
+		int count = 0;
 
 		Pattern regex = Pattern.compile("^tag:", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
 		Matcher regexMatcher = regex.matcher(searchCrieteria);
@@ -62,7 +84,7 @@ public class Solution {
 			regexMatcher = regex.matcher(searchCrieteria);
 			if (regexMatcher.find()) {
 				searchType = 'd';
-				key = "\\b" + searchCrieteria.replaceFirst("created:", "") + "\\b";
+				key = searchCrieteria.replaceFirst("created:", "");
 			}
 		}
 		
@@ -76,25 +98,35 @@ public class Solution {
 		
 		// content
 		if (searchType == 'c') {
+			count = 0;
 			for (Note n : notes) {
 				regex = Pattern.compile(key, Pattern.MULTILINE
 						| Pattern.CASE_INSENSITIVE);
 				regexMatcher = regex.matcher(n.getContent());
 				if (regexMatcher.find()) {
-					System.out.println(n.getGuid());
+					if(count > 0)
+						System.out.print("," + n.getGuid());
+					else
+						System.out.print(n.getGuid());
+					count++;
 				}
 			}	
 		}
 
 		// tag
 		else if (searchType == 't') {
+			count = 0;
 			for (Note n : notes) {
 				for(String tag: n.getTags()) {
 					regex = Pattern.compile(key, Pattern.MULTILINE
 							| Pattern.CASE_INSENSITIVE);
 					regexMatcher = regex.matcher(tag);
 					if (regexMatcher.find()) {
-						System.out.println(n.getGuid());
+						if(count > 0)
+							System.out.print("," + n.getGuid());
+						else
+							System.out.print(n.getGuid());
+						count++;
 						break;
 					}
 				}
@@ -103,13 +135,21 @@ public class Solution {
 		
 		// time
 		else if(searchType == 'd') {
+			count = 0;
 			SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
         	Date givenDate = (Date) sdf.parse(key);
 			for (Note n : notes) {
 				if(n.getCreated_at().compareTo(givenDate) > 0)
-					System.out.println(n.getGuid());
+					if(count > 0)
+						System.out.print("," + n.getGuid());
+					else
+						System.out.print(n.getGuid());
+					count++;
 			}	
 		}
+		
+		if(count > 0)
+			System.out.println();
 	}
 
 	private static boolean hasStarAtTheEnd(String searchCrieteria) {
@@ -145,4 +185,60 @@ public class Solution {
 		Unmarshaller un = context.createUnmarshaller();
 		return (Note) un.unmarshal(new ByteArrayInputStream(note.getBytes()));
 	}
+}
+
+
+
+@XmlRootElement(name = "note")
+@XmlType(propOrder = { "guid", "created", "tags", "content" })
+class Note {
+
+	private String guid, content;
+	private String created;
+	private Date created_at;
+	private String[] tags;
+
+	public String getGuid() {
+		return guid;
+	}
+
+	public void setGuid(String guid) {
+		this.guid = guid;
+	}
+
+	public String getContent() {
+		return content;
+	}
+
+	public void setContent(String content) {
+		this.content = content;
+	}
+
+	public String getCreated() {
+		return created;
+	}
+
+	public void setCreated(String created) throws ParseException {
+		this.created = created;
+		this.created_at = (Date) DatatypeConverter.parseDateTime(created).getTime();
+	}
+
+	public Date getCreated_at() {
+		return created_at;
+	}
+
+	@XmlElement(name = "tag")
+	public String[] getTags() {
+		return tags;
+	}
+
+	public void setTags(String[] tags) {
+		this.tags = tags;
+	}
+
+	@Override
+	public String toString() {
+		return guid;
+	}
+
 }
